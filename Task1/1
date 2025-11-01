@@ -1,0 +1,82 @@
+--======================================================
+-- Генератор псевдослучайной последовательности (LFSR)
+-- Полином: x^26 + x^6 + x^2 + x + 1
+-- Входная шина: 4 бита (data_in)
+-- Выходная шина: 8 бит (data_out)
+-- Управление: load, enable, req
+--======================================================
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity psp_generator is
+    Port (
+        clk       : in  STD_LOGIC;                  -- тактовый сигнал
+        rst       : in  STD_LOGIC;                  -- асинхронный сброс
+        load      : in  STD_LOGIC;                  -- сигнал загрузки входных данных
+        enable    : in  STD_LOGIC;                  -- разрешение генерации
+        req       : in  STD_LOGIC;                  -- запрос на выдачу блока
+        data_in   : in  STD_LOGIC_VECTOR(3 downto 0); -- входная шина (4 бита)
+        data_out  : out STD_LOGIC_VECTOR(7 downto 0); -- выходная шина (8 бит)
+        ready     : out STD_LOGIC                   -- сигнал готовности блока
+    );
+end psp_generator;
+
+architecture Behavioral of psp_generator is
+
+    signal lfsr_reg  : STD_LOGIC_VECTOR(25 downto 0) := (others => '0');
+    signal feedback  : STD_LOGIC;
+    signal out_reg   : STD_LOGIC_VECTOR(7 downto 0) := (others => '0');
+    signal bit_count : INTEGER range 0 to 8 := 0;
+    signal ready_int : STD_LOGIC := '0';
+
+begin
+    -- формирование обратной связи по полиному x^26 + x^6 + x^2 + x + 1
+    feedback <= lfsr_reg(25) xor lfsr_reg(5) xor lfsr_reg(1) xor lfsr_reg(0);
+
+    process(clk, rst)
+    begin
+        if rst = '1' then
+            lfsr_reg  <= (others => '0');
+            out_reg   <= (others => '0');
+            bit_count <= 0;
+            ready_int <= '0';
+        elsif rising_edge(clk) then
+            if load = '1' then
+                -- загрузка входных данных в младшие биты регистра
+                lfsr_reg(3 downto 0) <= data_in;
+            elsif enable = '1' then
+                -- сдвиг и формирование нового бита
+                lfsr_reg <= lfsr_reg(24 downto 0) & feedback;
+
+                -- накопление битов в выходном регистре
+                out_reg <= out_reg(6 downto 0) & lfsr_reg(25);
+                if bit_count < 7 then
+                    bit_count <= bit_count + 1;
+                    ready_int <= '0';
+                else
+                    bit_count <= 0;
+                    ready_int <= '1'; -- готов новый байт
+                end if;
+            else
+                ready_int <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- выдача данных по запросу
+    process(clk, rst)
+    begin
+        if rst = '1' then
+            data_out <= (others => '0');
+        elsif rising_edge(clk) then
+            if req = '1' and ready_int = '1' then
+                data_out <= out_reg;
+            end if;
+        end if;
+    end process;
+
+    ready <= ready_int;
+
+end Behavioral;
