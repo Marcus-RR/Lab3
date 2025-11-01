@@ -1,0 +1,84 @@
+--======================================================
+-- Тестбенч для проверки модуля psp_generator
+--======================================================
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity tb_psp_generator is
+end tb_psp_generator;
+
+architecture Behavioral of tb_psp_generator is
+
+    signal clk       : STD_LOGIC := '0';
+    signal rst       : STD_LOGIC := '1';
+    signal load      : STD_LOGIC := '0';
+    signal enable    : STD_LOGIC := '0';
+    signal req       : STD_LOGIC := '0';
+    signal data_in   : STD_LOGIC_VECTOR(3 downto 0) := (others => '0');
+    signal data_out  : STD_LOGIC_VECTOR(7 downto 0);
+    signal ready     : STD_LOGIC;
+
+    constant clk_period : time := 10 ns;
+
+begin
+
+    -- экземпляр тестируемого устройства
+    uut: entity work.psp_generator
+        port map (
+            clk      => clk,
+            rst      => rst,
+            load     => load,
+            enable   => enable,
+            req      => req,
+            data_in  => data_in,
+            data_out => data_out,
+            ready    => ready
+        );
+
+    -- генерация тактового сигнала
+    clk_process : process
+    begin
+        while true loop
+            clk <= '0';
+            wait for clk_period/2;
+            clk <= '1';
+            wait for clk_period/2;
+        end loop;
+    end process;
+
+    -- тестовые воздействия
+    stim_proc : process
+    begin
+        -- Сброс системы
+        rst <= '1';
+        wait for 30 ns;
+        rst <= '0';
+        wait for 20 ns;
+
+        -- Загрузка исходных данных
+        load <= '1';
+        data_in <= "1010";   -- пример инициализации
+        wait for 10 ns;
+        load <= '0';
+
+        -- Разрешаем генерацию
+        enable <= '1';
+
+        -- Наблюдаем за готовыми блоками
+        wait until ready = '1';
+        req <= '1';
+        wait for 10 ns;
+        req <= '0';
+
+        -- Продолжение генерации
+        wait for 200 ns;
+
+        -- Завершение теста
+        enable <= '0';
+        wait for 50 ns;
+        assert false report "Тест завершён успешно." severity failure;
+    end process;
+
+end Behavioral;
